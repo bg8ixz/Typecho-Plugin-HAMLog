@@ -6,12 +6,13 @@ if (!defined('__TYPECHO_ROOT_DIR__')) exit;
  * 
  * @package HAMLog
  * @author BG8IXZ
- * @version 1.0.0
+ * @version 1.0.1
  * @link https://imkee.com
  */
 
 class HAMLog_Plugin implements Typecho_Plugin_Interface
 {
+    const VERSION = '1.0.1';
     const TABLE_NAME = 'hamlog_config';
 
     public static function activate()
@@ -255,8 +256,34 @@ class HAMLog_Plugin implements Typecho_Plugin_Interface
         <div style="border: 1px solid #e0e0e0; padding: 15px; margin-bottom: 20px; background: #fff;">
             <div id="hamlog_version_check">版本检测中...</div>
         </div>
+        <?php
+        require_once __DIR__ . '/DataAccess.php';
+        $da = new HAMLog_DataAccess();
+        $connStatus = $da->testSupabaseConnection();
+        $statusClass = '';
+        $statusText = '';
+        if ($connStatus['status'] === 'connected') {
+            $statusClass = 'background:#d4edda;color:#155724;';
+            $statusText = 'Supabase 已连接';
+        } elseif ($connStatus['status'] === 'disabled') {
+            $statusClass = 'background:#fff3cd;color:#856404;';
+            $statusText = '使用本地数据库';
+        } else {
+            $statusClass = 'background:#f8d7da;color:#721c24;';
+            $statusText = 'Supabase 未连接';
+            if (isset($connStatus['details'])) {
+                $statusText .= ' (' . $connStatus['details'] . ')';
+            }
+        }
+        ?>
+        <div style="border: 1px solid #e0e0e0; padding: 15px; margin-bottom: 20px; background: #fff;">
+            <div style="display:flex;align-items:center;gap:10px;">
+                <span style="font-weight:bold;">Supabase 连接状态：</span>
+                <span style="<?php echo $statusClass; ?>padding:4px 12px;border-radius:4px;font-size:13px;"><?php echo $statusText; ?></span>
+            </div>
+        </div>
         <script>
-            var hamlog_version = "v1.0.0";
+            var hamlog_version = "v<?php echo self::VERSION; ?>";
             function hamlog_check_update() {
                 var container = document.getElementById("hamlog_version_check");
                 if (!container) {
@@ -328,7 +355,7 @@ class HAMLog_Plugin implements Typecho_Plugin_Interface
         $supabaseApi = new Typecho_Widget_Helper_Form_Element_Text(
             'supabase_api', null, $supabaseApiValue,
             'Supabase API 地址',
-            'Supabase 项目的 API 端点地址，格式如：https://xxxxxx.supabase.co。'
+            'Supabase 项目的 API 端点地址，格式如：https://xxxxxx.supabase.co，无账户 <a href="https://supabase.com/" target="_blank">Supabase 注册>></a>。'
         );
         $form->addInput($supabaseApi);
 
@@ -502,34 +529,26 @@ class HAMLog_Plugin implements Typecho_Plugin_Interface
 
     public static function renderList()
     {
-        $db = Typecho_Db::get();
-        $prefix = $db->getPrefix();
-        $table = $prefix . 'hamlog';
+        require_once __DIR__ . '/DataAccess.php';
+        
+        $da = new HAMLog_DataAccess();
         $page = self::getPage();
         $call = self::getSearch();
         $limit = 15;    // 每页显示15条记录
-        $start = ($page - 1) * $limit;
         $showFields = self::getShowFields();
         $labels = self::fieldLabels();
 
         try {
-            $where = "";
-            if ($call) {
-                $call = addslashes($call);
-                $where = " WHERE `CALL_SIGN` LIKE '%$call%' ";
-            }
-
-            $total = $db->fetchRow($db->query("SELECT COUNT(*) AS count FROM {$table} {$where}"))['count'];
+            $searchField = $call ? 'CALL_SIGN' : null;
+            $searchKeyword = $call;
+            
+            $total = $da->getTotalRecords($searchField, $searchKeyword);
             $totalPage = ceil($total / $limit);
-
-            $sql = "SELECT * FROM {$table} {$where} ORDER BY `QSO_DATE` DESC, `TIME_ON` DESC LIMIT {$start}, {$limit}";
-            $result = $db->query($sql);
-            $rows = [];
-            while ($row = $db->fetchRow($result)) $rows[] = $row;
+            $rows = $da->getRecords($page, $limit, $searchField, $searchKeyword);
 
             $myCall = '';
             try {
-                $profileRow = $db->fetchRow($db->select('my_callsign')->from($prefix . 'hamlog_profile')->where('id = ?', 1));
+                $profileRow = $da->getProfile();
                 if (!empty($profileRow['my_callsign'])) {
                     $myCall = trim($profileRow['my_callsign']);
                 }
@@ -546,7 +565,7 @@ class HAMLog_Plugin implements Typecho_Plugin_Interface
             <form method="get" style="margin:15px 0;display:flex;gap:10px;flex-wrap:wrap;">
                 <input type="text" name="call" value="'.htmlspecialchars($call).'" placeholder="输入您想搜索的呼号..." style="flex:1;padding:8px 12px;border:1px solid #ddd;border-radius:6px;">
                 <button type="submit" style="padding:8px 32px;min-width:100px;background:#007bff;color:white;border:none;border-radius:6px;cursor:pointer;">搜索</button>
-                '.($call ? '<button type="button" onclick="window.location.href=window.location.pathname" style="padding:8px 16px;background:#6c757d;color:white;border:none;border-radius:6px;cursor:pointer;">重置</button>' : '').'
+                '.($call ? '<button type="button" onclick="window.location.href=window.location.pathname" style="padding:8px 32px;background:#6c757d;color:white;border:none;border-radius:6px;cursor:pointer;">重置</button>' : '').'
             </form>';
 
             if (empty($rows)) {
