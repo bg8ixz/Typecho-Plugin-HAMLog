@@ -13,6 +13,44 @@ $db = Typecho\Db::get();
 
 $do = isset($_GET['do']) ? $_GET['do'] : '';
 
+function getPluginConfig() {
+    $defaults = [
+        'save_type' => 'local',
+        'supabase_api' => '',
+        'supabase_key' => '',
+        'supabase_table' => '',
+        'supabase_note' => '',
+        'front_fields' => 'CALL_SIGN,QSO_DATE,TIME_ON,BAND,MODE,FREQ',
+        'admin_fields' => 'CALL_SIGN,QSO_DATE,TIME_ON,BAND,MODE,FREQ,REMARK,CARD_SEND,CARD_RCV'
+    ];
+
+    try {
+        $opts = Typecho_Widget::widget('Widget_Options');
+        $pluginConfig = $opts->plugin('HAMLog');
+
+        foreach ($defaults as $key => &$val) {
+            if (isset($pluginConfig[$key]) && !empty($pluginConfig[$key])) {
+                $val = $pluginConfig[$key];
+            }
+        }
+    } catch (\Exception $e) {}
+
+    return $defaults;
+}
+
+require_once __DIR__ . '/DataAccess.php';
+
+$config = getPluginConfig();
+define('HAMLOG_CONFIG', serialize($config));
+
+class HAMLog_Plugin {
+    public static function getConfig() {
+        return unserialize(HAMLOG_CONFIG);
+    }
+}
+
+$da = new HAMLog_DataAccess();
+
 switch ($do) {
     case 'get':
         $id = isset($_GET['id']) ? intval($_GET['id']) : 0;
@@ -21,10 +59,7 @@ switch ($do) {
             exit;
         }
         
-        $prefix = $db->getPrefix();
-        $tableName = $prefix . 'hamlog';
-        $query = $db->query("SELECT * FROM `{$tableName}` WHERE id = " . $id);
-        $row = $db->fetchRow($query);
+        $row = $da->getRecord($id);
         
         if ($row) {
             echo json_encode($row);
@@ -40,67 +75,118 @@ switch ($do) {
             exit;
         }
 
-        $prefix = $db->getPrefix();
-        $tableName = $prefix . 'hamlog';
-        
         $cardSend = isset($_POST['CARD_SEND']) ? 1 : 0;
         $cardRcv = isset($_POST['CARD_RCV']) ? 1 : 0;
         
-        $call = htmlspecialchars(trim($_POST['CALL_SIGN'] ?? ''));
-        $qsoDate = $_POST['QSO_DATE'] ?? '';
-        $timeOn = $_POST['TIME_ON'] ?? '';
-        $band = htmlspecialchars(trim($_POST['BAND'] ?? ''));
-        $bandRx = htmlspecialchars(trim($_POST['BAND_RX'] ?? ''));
-        $mode = htmlspecialchars(trim($_POST['MODE'] ?? ''));
-        $freq = htmlspecialchars(trim($_POST['FREQ'] ?? ''));
-        $freqRx = htmlspecialchars(trim($_POST['FREQ_RX'] ?? ''));
-        $rstSent = htmlspecialchars(trim($_POST['RST_SENT'] ?? ''));
-        $rstRcvd = htmlspecialchars(trim($_POST['RST_RCVD'] ?? ''));
-        $txPwr = htmlspecialchars(trim($_POST['TX_PWR'] ?? ''));
-        $rxPwr = htmlspecialchars(trim($_POST['RX_PWR'] ?? ''));
-        $qth = htmlspecialchars(trim($_POST['QTH'] ?? ''));
-        $grid = htmlspecialchars(trim($_POST['GRID'] ?? ''));
-        $propMode = htmlspecialchars(trim($_POST['PROP_MODE'] ?? ''));
-        $satName = htmlspecialchars(trim($_POST['SAT_NAME'] ?? ''));
-        $remark = htmlspecialchars(trim($_POST['REMARK'] ?? ''));
+        $data = [
+            'CALL_SIGN' => htmlspecialchars(trim($_POST['CALL_SIGN'] ?? '')),
+            'QSO_DATE' => $_POST['QSO_DATE'] ?? '',
+            'TIME_ON' => $_POST['TIME_ON'] ?? '',
+            'BAND' => htmlspecialchars(trim($_POST['BAND'] ?? '')),
+            'BAND_RX' => htmlspecialchars(trim($_POST['BAND_RX'] ?? '')),
+            'MODE' => htmlspecialchars(trim($_POST['MODE'] ?? '')),
+            'FREQ' => htmlspecialchars(trim($_POST['FREQ'] ?? '')),
+            'FREQ_RX' => htmlspecialchars(trim($_POST['FREQ_RX'] ?? '')),
+            'RST_SENT' => htmlspecialchars(trim($_POST['RST_SENT'] ?? '')),
+            'RST_RCVD' => htmlspecialchars(trim($_POST['RST_RCVD'] ?? '')),
+            'TX_PWR' => htmlspecialchars(trim($_POST['TX_PWR'] ?? '')),
+            'RX_PWR' => htmlspecialchars(trim($_POST['RX_PWR'] ?? '')),
+            'QTH' => htmlspecialchars(trim($_POST['QTH'] ?? '')),
+            'GRID' => htmlspecialchars(trim($_POST['GRID'] ?? '')),
+            'PROP_MODE' => htmlspecialchars(trim($_POST['PROP_MODE'] ?? '')),
+            'SAT_NAME' => htmlspecialchars(trim($_POST['SAT_NAME'] ?? '')),
+            'REMARK' => htmlspecialchars(trim($_POST['REMARK'] ?? '')),
+            'CARD_SEND' => $cardSend,
+            'CARD_RCV' => $cardRcv
+        ];
         
         try {
-            $sql = "UPDATE `{$tableName}` SET 
-                `CALL_SIGN` = '{$call}', 
-                `QSO_DATE` = '{$qsoDate}', 
-                `TIME_ON` = '{$timeOn}', 
-                `BAND` = '{$band}', 
-                `BAND_RX` = '{$bandRx}', 
-                `MODE` = '{$mode}', 
-                `FREQ` = '{$freq}', 
-                `FREQ_RX` = '{$freqRx}', 
-                `RST_SENT` = '{$rstSent}', 
-                `RST_RCVD` = '{$rstRcvd}', 
-                `TX_PWR` = '{$txPwr}', 
-                `RX_PWR` = '{$rxPwr}', 
-                `QTH` = '{$qth}', 
-                `GRID` = '{$grid}', 
-                `PROP_MODE` = '{$propMode}', 
-                `SAT_NAME` = '{$satName}', 
-                `REMARK` = '{$remark}', 
-                `CARD_SEND` = {$cardSend}, 
-                `CARD_RCV` = {$cardRcv} 
-                WHERE id = {$id}";
-            
-            $db->query($sql);
-
+            $da->updateRecord($id, $data);
             echo json_encode(['success' => true]);
         } catch (Exception $e) {
             echo json_encode(['success' => false, 'error' => $e->getMessage()]);
         }
         break;
     
+    case 'checkExists':
+        $data = json_decode(file_get_contents('php://input'), true);
+        if (empty($data) || !is_array($data)) {
+            echo json_encode(['success' => false, 'error' => '无效数据']);
+            exit;
+        }
+        
+        $existsList = [];
+        foreach ($data as $item) {
+            $callSign = $item['call'] ?? '';
+            $qsoDate = $item['date'] ?? '';
+            $timeOn = $item['time'] ?? '';
+            
+            if (!empty($callSign) && !empty($qsoDate) && !empty($timeOn)) {
+                $exists = $da->checkRecordExists($callSign, $qsoDate, $timeOn);
+                $key = $callSign . '|' . $qsoDate . '|' . $timeOn;
+                $existsList[$key] = $exists;
+            }
+        }
+        
+        echo json_encode(['success' => true, 'data' => $existsList]);
+        exit;
+        break;
+    
+    case 'insert':
+        $data = json_decode(file_get_contents('php://input'), true);
+        if (empty($data)) {
+            echo json_encode(['success' => false, 'error' => '无效数据']);
+            exit;
+        }
+        
+        $callSign = $data['CALL_SIGN'] ?? '';
+        $qsoDate = $data['QSO_DATE'] ?? '';
+        $timeOn = $data['TIME_ON'] ?? '';
+        
+        if (empty($callSign) || empty($qsoDate) || empty($timeOn)) {
+            echo json_encode(['success' => false, 'error' => '缺少必填字段']);
+            exit;
+        }
+        
+        if ($da->checkRecordExists($callSign, $qsoDate, $timeOn)) {
+            echo json_encode(['success' => false, 'skipped' => true, 'message' => '记录已存在']);
+            exit;
+        }
+        
+        $insertData = [
+            'CALL_SIGN' => $callSign,
+            'QSO_DATE' => $qsoDate,
+            'TIME_ON' => $timeOn,
+            'BAND' => $data['BAND'] ?? '',
+            'BAND_RX' => $data['BAND_RX'] ?? '',
+            'MODE' => $data['MODE'] ?? '',
+            'FREQ' => $data['FREQ'] ?? '',
+            'FREQ_RX' => $data['FREQ_RX'] ?? '',
+            'RST_SENT' => $data['RST_SENT'] ?? '',
+            'RST_RCVD' => $data['RST_RCVD'] ?? '',
+            'TX_PWR' => $data['TX_PWR'] ?? '',
+            'RX_PWR' => $data['RX_PWR'] ?? '',
+            'QTH' => $data['QTH'] ?? '',
+            'GRID' => $data['GRID'] ?? '',
+            'PROP_MODE' => $data['PROP_MODE'] ?? '',
+            'SAT_NAME' => $data['SAT_NAME'] ?? '',
+            'REMARK' => $data['REMARK'] ?? '',
+            'CARD_SEND' => $data['CARD_SEND'] ?? 0,
+            'CARD_RCV' => $data['CARD_RCV'] ?? 0,
+            'CREATED' => $data['CREATED'] ?? time()
+        ];
+        
+        if ($da->insertRecord($insertData)) {
+            echo json_encode(['success' => true]);
+        } else {
+            echo json_encode(['success' => false, 'error' => '插入失败']);
+        }
+        break;
+    
     case 'delete':
         $id = isset($_GET['id']) ? intval($_GET['id']) : 0;
         if ($id > 0) {
-            $prefix = $db->getPrefix();
-            $tableName = $prefix . 'hamlog';
-            $db->query("DELETE FROM `{$tableName}` WHERE id = " . $id);
+            $da->deleteRecord($id);
         }
         echo json_encode(['success' => true]);
         break;
@@ -111,10 +197,16 @@ switch ($do) {
         $value = isset($_GET['v']) ? intval($_GET['v']) : 0;
 
         if ($id > 0 && in_array($field, ['card_send', 'card_rcv'])) {
-            $prefix = $db->getPrefix();
-            $tableName = $prefix . 'hamlog';
-            $db->query("UPDATE `{$tableName}` SET `{$field}` = " . $value . " WHERE id = " . $id);
+            $data = [strtoupper($field) => $value];
+            $da->updateRecord($id, $data);
         }
+        echo json_encode(['success' => true]);
+        break;
+    
+    case 'clearSession':
+        session_start();
+        unset($_SESSION['hamlog_records']);
+        unset($_SESSION['hamlog_fields']);
         echo json_encode(['success' => true]);
         break;
     
