@@ -71,27 +71,13 @@ $rows = [];
 $total = 0;
 $totalPages = 1;
 try {
-    $prefix = $db->getPrefix();
-    $tableName = $prefix . 'hamlog';
+    require_once __DIR__ . '/DataAccess.php';
+    $da = new HAMLog_DataAccess();
     
-    $where = '';
-    $keyword = '';
-    if ((isset($searchKeyword) && $searchKeyword !== '') && !empty($searchField)) {
-        $validFields = ['CALL_SIGN', 'BAND', 'BAND_RX', 'MODE', 'FREQ', 'QTH', 'GRID', 'PROP_MODE', 'SAT_NAME', 'CARD_SEND', 'CARD_RCV'];
-        if (in_array($searchField, $validFields)) {
-            if ($searchField === 'CARD_SEND' || $searchField === 'CARD_RCV') {
-                $where = " WHERE `{$searchField}` = '" . addslashes($searchKeyword) . "'";
-            } else {
-                $keyword = '%' . addslashes($searchKeyword) . '%';
-                $where = " WHERE `{$searchField}` LIKE '{$keyword}'";
-            }
-        }
-    }
-    
-    $totalRow = $db->fetchRow($db->query("SELECT COUNT(*) AS count FROM {$tableName}{$where}"));
-    $total = intval($totalRow['count'] ?? 0);
+    $sField = (isset($searchKeyword) && $searchKeyword !== '') ? $searchField : null;
+    $total = $da->getTotalRecords($sField, $searchKeyword);
     $totalPages = $total > 0 ? ceil($total / $pageSize) : 1;
-    $rows = $db->fetchAll("SELECT * FROM `{$tableName}`{$where} ORDER BY QSO_DATE DESC, TIME_ON DESC LIMIT {$start}, {$pageSize}");
+    $rows = $da->getRecords($page, $pageSize, $sField, $searchKeyword);
 } catch (\Exception $e) {}
 
 $baseUrl = Helper::options()->siteUrl . 'usr/plugins/HAMLog/api.php';
