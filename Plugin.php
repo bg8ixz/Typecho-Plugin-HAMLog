@@ -250,6 +250,39 @@ class HAMLog_Plugin implements Typecho_Plugin_Interface
 
     public static function config(Typecho_Widget_Helper_Form $form)
     {
+        ?>
+        <!-- 版本检测 -->
+        <div style="border: 1px solid #e0e0e0; padding: 15px; margin-bottom: 20px; background: #fff;">
+            <div id="hamlog_version_check">版本检测中...</div>
+        </div>
+        <script>
+            var hamlog_version = "v1.0.0";
+            function hamlog_check_update() {
+                var container = document.getElementById("hamlog_version_check");
+                if (!container) {
+                    return;
+                }
+                var ajax = new XMLHttpRequest();
+                ajax.open("get", "https://api.github.com/repos/bg8ixz/Typecho-Plugin-HAMLog/releases/latest");
+                ajax.send();
+                ajax.onreadystatechange = function() {
+                    if (ajax.readyState === 4 && ajax.status === 200) {
+                        var obj = JSON.parse(ajax.responseText);
+                        var newest = obj.tag_name;
+                        if (newest > hamlog_version) {
+                            container.innerHTML = "<div style='display: flex; justify-content: space-between; align-items: center;'><span>发现新版本：<strong>" + obj.name + "</strong> | 当前版本：" + hamlog_version + "</span><div style='display: flex; gap: 8px;'><button type='button' onclick=\"location.href='" + obj.zipball_url + "'\" class='btn primary'>点击下载</button><button type='button' onclick=\"window.open('" + obj.html_url + "', '_blank')\" class='btn'>更新日志</button></div></div>";
+                        } else {
+                            container.innerHTML = "当前插件版本：<strong>" + hamlog_version + "</strong> 已是最新版，无需更新。";
+                        }
+                    } else if (ajax.readyState === 4 && ajax.status !== 200) {
+                        container.innerHTML = "版本检测失败，请稍后重试。";
+                    }
+                }
+            }
+            hamlog_check_update();
+        </script>
+        <?php
+
         $fieldOptions = [
             'CALL_SIGN' => '呼号',
             'QSO_DATE' => '日期',
@@ -287,31 +320,36 @@ class HAMLog_Plugin implements Typecho_Plugin_Interface
             'save_type',
             ['local' => '本地数据库', 'supabase' => 'Supabase'],
             $saveTypeValue,
-            '数据存储位置'
+            '数据存储位置',
+            '选择通联日志数据的存储位置，本地数据库或 Supabase 云数据库（保留功能）。'
         );
         $form->addInput($saveType);
 
         $supabaseApi = new Typecho_Widget_Helper_Form_Element_Text(
             'supabase_api', null, $supabaseApiValue,
-            'Supabase API 地址'
+            'Supabase API 地址',
+            'Supabase 项目的 API 端点地址，格式如：https://xxxxxx.supabase.co。'
         );
         $form->addInput($supabaseApi);
 
         $supabaseKey = new Typecho_Widget_Helper_Form_Element_Text(
             'supabase_key', null, $supabaseKeyValue,
-            'Supabase API Key'
+            'Supabase API Key',
+            'Supabase 项目的 API Key，可在项目设置中获取。'
         );
         $form->addInput($supabaseKey);
 
         $supabaseTable = new Typecho_Widget_Helper_Form_Element_Text(
             'supabase_table', null, $supabaseTableValue,
-            'Supabase 数据表名'
+            'Supabase 数据表名',
+            '存储通联日志的数据表名称，需提前在 Supabase 中创建。'
         );
         $form->addInput($supabaseTable);
 
         $supabaseNote = new Typecho_Widget_Helper_Form_Element_Text(
             'supabase_note', null, $supabaseNoteValue,
-            'Supabase 备注'
+            'Supabase 备注',
+            '可填写额外的说明信息或配置备注（给自己看的，无其他作用）。'
         );
         $form->addInput($supabaseNote);
 
@@ -320,7 +358,7 @@ class HAMLog_Plugin implements Typecho_Plugin_Interface
             $fieldOptions,
             $frontFieldsArr,
             '前台页面显示字段',
-            '选择前台页面要显示的字段'
+            '选择前台页面要显示的字段，创建页面后使用[HAMLog]标签即可调用。'
         );
         $form->addInput($frontFields);
 
@@ -329,7 +367,7 @@ class HAMLog_Plugin implements Typecho_Plugin_Interface
             $fieldOptions,
             $adminFieldsArr,
             '后台日志列表显示字段',
-            '选择后台日志列表要显示的字段'
+            '选择后台日志列表要显示的字段，按需选择即可。'
         );
         $form->addInput($adminFields);
     }
