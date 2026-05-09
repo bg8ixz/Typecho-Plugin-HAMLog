@@ -6,8 +6,9 @@ if (!defined('__TYPECHO_ROOT_DIR__')) exit;
 
 // 在输出前，先执行保存逻辑
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
-    $db = Typecho_Db::get();
-    $db->query($db->update('table.hamlog_profile')->rows([
+    require_once __DIR__ . '/DataAccess.php';
+    $da = new HAMLog_DataAccess();
+    $da->updateProfile([
         'my_callsign' => htmlspecialchars(trim($_POST['my_callsign'] ?? '')),
         'my_qth' => htmlspecialchars(trim($_POST['my_qth'] ?? '')),
         'my_device' => htmlspecialchars(trim($_POST['my_device'] ?? '')),
@@ -15,7 +16,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         'my_antenna' => htmlspecialchars(trim($_POST['my_antenna'] ?? '')),
         'my_grid' => htmlspecialchars(trim($_POST['my_grid'] ?? '')),
         'update_time' => time()
-    ])->where('id = ?', 1));
+    ]);
     
     $options = Typecho_Widget::widget('Widget_Options');
     $panelPath = Typecho_Common::url('extending.php', $options->adminUrl);
@@ -26,13 +27,14 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 include __TYPECHO_ROOT_DIR__ . '/admin/header.php';
 include __TYPECHO_ROOT_DIR__ . '/admin/menu.php';
 
-$db = Typecho_Db::get();
+require_once __DIR__ . '/DataAccess.php';
+$da = new HAMLog_DataAccess();
 $options = Typecho_Widget::widget('Widget_Options');
 $panelPath = Typecho_Common::url('extending.php', $options->adminUrl);
 
 $saved = isset($_GET['saved']) && $_GET['saved'] == 1;
 
-$profile = $db->fetchRow($db->select()->from('table.hamlog_profile')->where('id = ?', 1));
+$profile = $da->getProfile();
 ?>
 
 <main class="main">
